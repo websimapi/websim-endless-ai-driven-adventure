@@ -1,50 +1,73 @@
-<html><head><base href="https://"><title>Endless AI-Driven Adventure</title>
+<html><head><base href="https://"><title>3D Space Adventure</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #111;
+    background: #000;
     color: #fff;
     font-family: monospace;
     overflow: hidden;
+    perspective: 1000px;
   }
   #game {
     width: 100vw;
     height: 100vh;
     position: relative;
+    transform-style: preserve-3d;
   }
   .player {
     width: 30px;
     height: 30px;
-    background: #4a9;
+    background: radial-gradient(circle, #4af, #4a9);
     position: absolute;
     border-radius: 50%;
-    transition: all 0.2s;
+    transform-style: preserve-3d;
+    box-shadow: 0 0 15px #4af;
   }
   .enemy {
     width: 20px;
     height: 20px;
-    background: #f44;
+    background: radial-gradient(circle, #f66, #f44);
     position: absolute;
-    border-radius: 3px;
+    border-radius: 50%;
+    transform-style: preserve-3d;
+    box-shadow: 0 0 10px #f44;
   }
   .coin {
     width: 15px;
     height: 15px;
-    background: #fd4;
+    background: radial-gradient(circle, #ff4, #fd4);
     position: absolute;
     border-radius: 50%;
-    animation: pulse 1s infinite;
+    transform-style: preserve-3d;
+    animation: pulse 1.5s infinite;
+    box-shadow: 0 0 8px #ff4;
+  }
+  .sphere-chunk {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border: 1px solid rgba(100, 149, 237, 0.2);
+    border-radius: 50%;
+    transform-style: preserve-3d;
+    pointer-events: none;
   }
   #score {
     position: fixed;
     top: 20px;
     left: 20px;
     font-size: 24px;
+    text-shadow: 0 0 5px #4af;
   }
   @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
+    0% { transform: scale3d(1, 1, 1); }
+    50% { transform: scale3d(1.2, 1.2, 1.2); }
+    100% { transform: scale3d(1, 1, 1); }
+  }
+  .star {
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+    pointer-events: none;
   }
 </style>
 </head><body>
@@ -60,8 +83,44 @@
       this.player = this.createPlayer();
       this.enemies = [];
       this.coins = [];
+      this.chunks = [];
+      this.chunkSize = 500;
+      this.maxEntitiesPerChunk = 5;
+      this.createStarfield();
+      this.createChunks();
       this.ai = new AI(this);
       this.gameLoop();
+    }
+
+    createStarfield() {
+      for (let i = 0; i < 200; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.width = Math.random() * 3 + 'px';
+        star.style.height = star.style.width;
+        star.style.left = Math.random() * window.innerWidth + 'px';
+        star.style.top = Math.random() * window.innerHeight + 'px';
+        star.style.transform = `translateZ(${-Math.random() * 1000}px)`;
+        this.gameArea.appendChild(star);
+      }
+    }
+
+    createChunks() {
+      for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+          for (let z = -1; z <= 1; z++) {
+            const chunk = document.createElement('div');
+            chunk.className = 'sphere-chunk';
+            chunk.style.transform = `translate3d(${x * this.chunkSize}px, ${y * this.chunkSize}px, ${z * this.chunkSize}px)`;
+            this.gameArea.appendChild(chunk);
+            this.chunks.push({
+              element: chunk,
+              position: {x, y, z},
+              entities: []
+            });
+          }
+        }
+      }
     }
 
     createPlayer() {
@@ -69,47 +128,84 @@
       player.className = 'player';
       player.style.left = '50%';
       player.style.top = '50%';
+      player.style.transform = 'translateZ(0)';
       this.gameArea.appendChild(player);
       return player;
     }
 
+    getChunkForPosition(x, y, z) {
+      return this.chunks.find(chunk => {
+        const chunkX = chunk.position.x * this.chunkSize;
+        const chunkY = chunk.position.y * this.chunkSize;
+        const chunkZ = chunk.position.z * this.chunkSize;
+        return x >= chunkX - this.chunkSize/2 && x < chunkX + this.chunkSize/2 &&
+               y >= chunkY - this.chunkSize/2 && y < chunkY + this.chunkSize/2 &&
+               z >= chunkZ - this.chunkSize/2 && z < chunkZ + this.chunkSize/2;
+      });
+    }
+
     spawnEnemy() {
+      const chunk = this.chunks[Math.floor(Math.random() * this.chunks.length)];
+      if (chunk.entities.length >= this.maxEntitiesPerChunk) return;
+
       const enemy = document.createElement('div');
       enemy.className = 'enemy';
-      enemy.style.left = Math.random() * (window.innerWidth - 20) + 'px';
-      enemy.style.top = Math.random() * (window.innerHeight - 20) + 'px';
+      const x = chunk.position.x * this.chunkSize + (Math.random() - 0.5) * this.chunkSize;
+      const y = chunk.position.y * this.chunkSize + (Math.random() - 0.5) * this.chunkSize;
+      const z = chunk.position.z * this.chunkSize + (Math.random() - 0.5) * this.chunkSize;
+      enemy.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
       this.gameArea.appendChild(enemy);
       this.enemies.push(enemy);
+      chunk.entities.push(enemy);
     }
 
     spawnCoin() {
+      const chunk = this.chunks[Math.floor(Math.random() * this.chunks.length)];
+      if (chunk.entities.length >= this.maxEntitiesPerChunk) return;
+
       const coin = document.createElement('div');
       coin.className = 'coin';
-      coin.style.left = Math.random() * (window.innerWidth - 15) + 'px';
-      coin.style.top = Math.random() * (window.innerHeight - 15) + 'px';
+      const x = chunk.position.x * this.chunkSize + (Math.random() - 0.5) * this.chunkSize;
+      const y = chunk.position.y * this.chunkSize + (Math.random() - 0.5) * this.chunkSize;
+      const z = chunk.position.z * this.chunkSize + (Math.random() - 0.5) * this.chunkSize;
+      coin.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
       this.gameArea.appendChild(coin);
       this.coins.push(coin);
+      chunk.entities.push(coin);
     }
 
-    movePlayer(x, y) {
-      const bounds = this.player.getBoundingClientRect();
-      let newX = bounds.left + x;
-      let newY = bounds.top + y;
+    movePlayer(x, y, z) {
+      const matrix = new DOMMatrix(window.getComputedStyle(this.player).transform);
+      let newX = matrix.m41 + x;
+      let newY = matrix.m42 + y;
+      let newZ = matrix.m43 + z;
       
-      newX = Math.max(0, Math.min(window.innerWidth - bounds.width, newX));
-      newY = Math.max(0, Math.min(window.innerHeight - bounds.height, newY));
+      // Limit movement within the game space
+      const limit = this.chunkSize * 1.5;
+      newX = Math.max(-limit, Math.min(limit, newX));
+      newY = Math.max(-limit, Math.min(limit, newY));
+      newZ = Math.max(-limit, Math.min(limit, newZ));
       
-      this.player.style.left = newX + 'px';
-      this.player.style.top = newY + 'px';
+      this.player.style.transform = `translate3d(${newX}px, ${newY}px, ${newZ}px)`;
     }
 
     checkCollisions() {
-      const playerBounds = this.player.getBoundingClientRect();
+      const playerMatrix = new DOMMatrix(window.getComputedStyle(this.player).transform);
+      const playerPos = {
+        x: playerMatrix.m41,
+        y: playerMatrix.m42,
+        z: playerMatrix.m43
+      };
 
       // Check coin collisions
       this.coins.forEach((coin, index) => {
-        const coinBounds = coin.getBoundingClientRect();
-        if (this.isColliding(playerBounds, coinBounds)) {
+        const coinMatrix = new DOMMatrix(window.getComputedStyle(coin).transform);
+        const distance = this.getDistance3D(
+          playerPos,
+          {x: coinMatrix.m41, y: coinMatrix.m42, z: coinMatrix.m43}
+        );
+        
+        if (distance < 30) {
           this.score += 10;
           document.getElementById('score').textContent = `Score: ${this.score}`;
           coin.remove();
@@ -119,36 +215,32 @@
 
       // Check enemy collisions
       this.enemies.forEach(enemy => {
-        const enemyBounds = enemy.getBoundingClientRect();
-        if (this.isColliding(playerBounds, enemyBounds)) {
+        const enemyMatrix = new DOMMatrix(window.getComputedStyle(enemy).transform);
+        const distance = this.getDistance3D(
+          playerPos,
+          {x: enemyMatrix.m41, y: enemyMatrix.m42, z: enemyMatrix.m43}
+        );
+        
+        if (distance < 40) {
           this.score = Math.max(0, this.score - 5);
           document.getElementById('score').textContent = `Score: ${this.score}`;
         }
       });
     }
 
-    isColliding(rect1, rect2) {
-      return !(rect1.right < rect2.left || 
-               rect1.left > rect2.right || 
-               rect1.bottom < rect2.top || 
-               rect1.top > rect2.bottom);
+    getDistance3D(pos1, pos2) {
+      const dx = pos1.x - pos2.x;
+      const dy = pos1.y - pos2.y;
+      const dz = pos1.z - pos2.z;
+      return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     gameLoop() {
-      if (Math.random() < 0.02) this.spawnEnemy();
-      if (Math.random() < 0.03) this.spawnCoin();
+      if (Math.random() < 0.01) this.spawnEnemy();
+      if (Math.random() < 0.015) this.spawnCoin();
       
       this.ai.update();
       this.checkCollisions();
-      
-      // Clean up off-screen enemies
-      this.enemies = this.enemies.filter(enemy => {
-        if (enemy.offsetLeft < -50 || enemy.offsetLeft > window.innerWidth + 50) {
-          enemy.remove();
-          return false;
-        }
-        return true;
-      });
 
       requestAnimationFrame(() => this.gameLoop());
     }
@@ -158,51 +250,76 @@
     constructor(game) {
       this.game = game;
       this.targetCoin = null;
-      this.escapeDirection = { x: 0, y: 0 };
+      this.escapeVector = {x: 0, y: 0, z: 0};
     }
 
     update() {
-      const playerBounds = this.game.player.getBoundingClientRect();
-      let nearestEnemy = this.findNearestEnemy(playerBounds);
-      let moveX = 0;
-      let moveY = 0;
+      const playerMatrix = new DOMMatrix(window.getComputedStyle(this.game.player).transform);
+      const playerPos = {
+        x: playerMatrix.m41,
+        y: playerMatrix.m42,
+        z: playerMatrix.m43
+      };
 
-      // Find nearest coin if we don't have a target
+      let nearestEnemy = this.findNearestEnemy(playerPos);
+      let moveX = 0, moveY = 0, moveZ = 0;
+
       if (!this.targetCoin || !this.game.coins.includes(this.targetCoin)) {
-        this.targetCoin = this.findNearestCoin(playerBounds);
+        this.targetCoin = this.findNearestCoin(playerPos);
       }
 
-      // Avoid enemies if they're too close
-      if (nearestEnemy && this.getDistance(playerBounds, nearestEnemy.getBoundingClientRect()) < 100) {
-        this.escapeDirection = this.getEscapeDirection(playerBounds, nearestEnemy.getBoundingClientRect());
-        moveX = this.escapeDirection.x * 5;
-        moveY = this.escapeDirection.y * 5;
+      if (nearestEnemy) {
+        const enemyMatrix = new DOMMatrix(window.getComputedStyle(nearestEnemy).transform);
+        const enemyPos = {
+          x: enemyMatrix.m41,
+          y: enemyMatrix.m42,
+          z: enemyMatrix.m43
+        };
+        const distance = this.game.getDistance3D(playerPos, enemyPos);
+
+        if (distance < 100) {
+          this.escapeVector = this.getEscapeVector(playerPos, enemyPos);
+          moveX = this.escapeVector.x * 5;
+          moveY = this.escapeVector.y * 5;
+          moveZ = this.escapeVector.z * 5;
+        }
       }
-      // Move towards coin
-      else if (this.targetCoin) {
-        const coinBounds = this.targetCoin.getBoundingClientRect();
-        moveX = Math.sign(coinBounds.left - playerBounds.left) * 3;
-        moveY = Math.sign(coinBounds.top - playerBounds.top) * 3;
+      
+      if (this.targetCoin && !moveX && !moveY && !moveZ) {
+        const coinMatrix = new DOMMatrix(window.getComputedStyle(this.targetCoin).transform);
+        const coinPos = {
+          x: coinMatrix.m41,
+          y: coinMatrix.m42,
+          z: coinMatrix.m43
+        };
+        moveX = Math.sign(coinPos.x - playerPos.x) * 3;
+        moveY = Math.sign(coinPos.y - playerPos.y) * 3;
+        moveZ = Math.sign(coinPos.z - playerPos.z) * 3;
       }
 
-      this.game.movePlayer(moveX, moveY);
+      this.game.movePlayer(moveX, moveY, moveZ);
     }
 
-    findNearestEnemy(playerBounds) {
-      return this.findNearest(this.game.enemies, playerBounds);
+    findNearestEnemy(playerPos) {
+      return this.findNearest(this.game.enemies, playerPos);
     }
 
-    findNearestCoin(playerBounds) {
-      return this.findNearest(this.game.coins, playerBounds);
+    findNearestCoin(playerPos) {
+      return this.findNearest(this.game.coins, playerPos);
     }
 
-    findNearest(elements, playerBounds) {
+    findNearest(elements, playerPos) {
       let nearest = null;
       let minDistance = Infinity;
 
       elements.forEach(element => {
-        const elementBounds = element.getBoundingClientRect();
-        const distance = this.getDistance(playerBounds, elementBounds);
+        const matrix = new DOMMatrix(window.getComputedStyle(element).transform);
+        const elementPos = {
+          x: matrix.m41,
+          y: matrix.m42,
+          z: matrix.m43
+        };
+        const distance = this.game.getDistance3D(playerPos, elementPos);
         if (distance < minDistance) {
           minDistance = distance;
           nearest = element;
@@ -212,19 +329,15 @@
       return nearest;
     }
 
-    getDistance(rect1, rect2) {
-      const dx = (rect1.left + rect1.width/2) - (rect2.left + rect2.width/2);
-      const dy = (rect1.top + rect1.height/2) - (rect2.top + rect2.height/2);
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    getEscapeDirection(playerBounds, enemyBounds) {
-      const dx = playerBounds.left - enemyBounds.left;
-      const dy = playerBounds.top - enemyBounds.top;
-      const magnitude = Math.sqrt(dx * dx + dy * dy);
+    getEscapeVector(playerPos, enemyPos) {
+      const dx = playerPos.x - enemyPos.x;
+      const dy = playerPos.y - enemyPos.y;
+      const dz = playerPos.z - enemyPos.z;
+      const magnitude = Math.sqrt(dx * dx + dy * dy + dz * dz);
       return {
         x: dx / magnitude,
-        y: dy / magnitude
+        y: dy / magnitude,
+        z: dz / magnitude
       };
     }
   }
