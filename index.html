@@ -1,0 +1,236 @@
+<html><head><base href="https://"><title>Endless AI-Driven Adventure</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    color: #fff;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #game {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+  .player {
+    width: 30px;
+    height: 30px;
+    background: #4a9;
+    position: absolute;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+  .enemy {
+    width: 20px;
+    height: 20px;
+    background: #f44;
+    position: absolute;
+    border-radius: 3px;
+  }
+  .coin {
+    width: 15px;
+    height: 15px;
+    background: #fd4;
+    position: absolute;
+    border-radius: 50%;
+    animation: pulse 1s infinite;
+  }
+  #score {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    font-size: 24px;
+  }
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+</style>
+</head><body>
+<div id="game">
+  <div id="score">Score: 0</div>
+</div>
+
+<script type="module">
+  class Game {
+    constructor() {
+      this.score = 0;
+      this.gameArea = document.getElementById('game');
+      this.player = this.createPlayer();
+      this.enemies = [];
+      this.coins = [];
+      this.ai = new AI(this);
+      this.gameLoop();
+    }
+
+    createPlayer() {
+      const player = document.createElement('div');
+      player.className = 'player';
+      player.style.left = '50%';
+      player.style.top = '50%';
+      this.gameArea.appendChild(player);
+      return player;
+    }
+
+    spawnEnemy() {
+      const enemy = document.createElement('div');
+      enemy.className = 'enemy';
+      enemy.style.left = Math.random() * (window.innerWidth - 20) + 'px';
+      enemy.style.top = Math.random() * (window.innerHeight - 20) + 'px';
+      this.gameArea.appendChild(enemy);
+      this.enemies.push(enemy);
+    }
+
+    spawnCoin() {
+      const coin = document.createElement('div');
+      coin.className = 'coin';
+      coin.style.left = Math.random() * (window.innerWidth - 15) + 'px';
+      coin.style.top = Math.random() * (window.innerHeight - 15) + 'px';
+      this.gameArea.appendChild(coin);
+      this.coins.push(coin);
+    }
+
+    movePlayer(x, y) {
+      const bounds = this.player.getBoundingClientRect();
+      let newX = bounds.left + x;
+      let newY = bounds.top + y;
+      
+      newX = Math.max(0, Math.min(window.innerWidth - bounds.width, newX));
+      newY = Math.max(0, Math.min(window.innerHeight - bounds.height, newY));
+      
+      this.player.style.left = newX + 'px';
+      this.player.style.top = newY + 'px';
+    }
+
+    checkCollisions() {
+      const playerBounds = this.player.getBoundingClientRect();
+
+      // Check coin collisions
+      this.coins.forEach((coin, index) => {
+        const coinBounds = coin.getBoundingClientRect();
+        if (this.isColliding(playerBounds, coinBounds)) {
+          this.score += 10;
+          document.getElementById('score').textContent = `Score: ${this.score}`;
+          coin.remove();
+          this.coins.splice(index, 1);
+        }
+      });
+
+      // Check enemy collisions
+      this.enemies.forEach(enemy => {
+        const enemyBounds = enemy.getBoundingClientRect();
+        if (this.isColliding(playerBounds, enemyBounds)) {
+          this.score = Math.max(0, this.score - 5);
+          document.getElementById('score').textContent = `Score: ${this.score}`;
+        }
+      });
+    }
+
+    isColliding(rect1, rect2) {
+      return !(rect1.right < rect2.left || 
+               rect1.left > rect2.right || 
+               rect1.bottom < rect2.top || 
+               rect1.top > rect2.bottom);
+    }
+
+    gameLoop() {
+      if (Math.random() < 0.02) this.spawnEnemy();
+      if (Math.random() < 0.03) this.spawnCoin();
+      
+      this.ai.update();
+      this.checkCollisions();
+      
+      // Clean up off-screen enemies
+      this.enemies = this.enemies.filter(enemy => {
+        if (enemy.offsetLeft < -50 || enemy.offsetLeft > window.innerWidth + 50) {
+          enemy.remove();
+          return false;
+        }
+        return true;
+      });
+
+      requestAnimationFrame(() => this.gameLoop());
+    }
+  }
+
+  class AI {
+    constructor(game) {
+      this.game = game;
+      this.targetCoin = null;
+      this.escapeDirection = { x: 0, y: 0 };
+    }
+
+    update() {
+      const playerBounds = this.game.player.getBoundingClientRect();
+      let nearestEnemy = this.findNearestEnemy(playerBounds);
+      let moveX = 0;
+      let moveY = 0;
+
+      // Find nearest coin if we don't have a target
+      if (!this.targetCoin || !this.game.coins.includes(this.targetCoin)) {
+        this.targetCoin = this.findNearestCoin(playerBounds);
+      }
+
+      // Avoid enemies if they're too close
+      if (nearestEnemy && this.getDistance(playerBounds, nearestEnemy.getBoundingClientRect()) < 100) {
+        this.escapeDirection = this.getEscapeDirection(playerBounds, nearestEnemy.getBoundingClientRect());
+        moveX = this.escapeDirection.x * 5;
+        moveY = this.escapeDirection.y * 5;
+      }
+      // Move towards coin
+      else if (this.targetCoin) {
+        const coinBounds = this.targetCoin.getBoundingClientRect();
+        moveX = Math.sign(coinBounds.left - playerBounds.left) * 3;
+        moveY = Math.sign(coinBounds.top - playerBounds.top) * 3;
+      }
+
+      this.game.movePlayer(moveX, moveY);
+    }
+
+    findNearestEnemy(playerBounds) {
+      return this.findNearest(this.game.enemies, playerBounds);
+    }
+
+    findNearestCoin(playerBounds) {
+      return this.findNearest(this.game.coins, playerBounds);
+    }
+
+    findNearest(elements, playerBounds) {
+      let nearest = null;
+      let minDistance = Infinity;
+
+      elements.forEach(element => {
+        const elementBounds = element.getBoundingClientRect();
+        const distance = this.getDistance(playerBounds, elementBounds);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearest = element;
+        }
+      });
+
+      return nearest;
+    }
+
+    getDistance(rect1, rect2) {
+      const dx = (rect1.left + rect1.width/2) - (rect2.left + rect2.width/2);
+      const dy = (rect1.top + rect1.height/2) - (rect2.top + rect2.height/2);
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    getEscapeDirection(playerBounds, enemyBounds) {
+      const dx = playerBounds.left - enemyBounds.left;
+      const dy = playerBounds.top - enemyBounds.top;
+      const magnitude = Math.sqrt(dx * dx + dy * dy);
+      return {
+        x: dx / magnitude,
+        y: dy / magnitude
+      };
+    }
+  }
+
+  // Start the game
+  const game = new Game();
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body></html>
